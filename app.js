@@ -45,8 +45,10 @@ stem.castShadow=true;
 // A small physical projection lamp. The luminous lens is located at the
 // exact optical emitter and the housing points along the actual spotlight.
 const lamp=new THREE.Group();scene.add(lamp);
-const lampBase=roundedBase(.35,.07,darkMaterial,EMITTER.x,EMITTER.z,lamp);
-const lampStem=mesh(new THREE.CylinderGeometry(.028,.035,2.8,16),stemMaterial,[EMITTER.x,1.6,EMITTER.z],lamp);
+const lampBaseHeight=.07;
+const lampBase=roundedBase(.35,lampBaseHeight,darkMaterial,EMITTER.x,EMITTER.z,lamp);
+const lampStemBottom=lampBase.position.y+lampBaseHeight-.015,lampStemTop=EMITTER.y;
+const lampStem=mesh(new THREE.CylinderGeometry(.028,.035,lampStemTop-lampStemBottom,16),stemMaterial,[EMITTER.x,(lampStemBottom+lampStemTop)/2,EMITTER.z],lamp);
 const head=new THREE.Group();head.position.copy(EMITTER);head.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),spot.target.position.clone().sub(EMITTER).normalize());lamp.add(head);
 const body=mesh(new THREE.CylinderGeometry(.14,.23,.55,40,1,true),darkMaterial,[0,0,.22],head);body.rotation.x=Math.PI/2;
 mesh(new THREE.CircleGeometry(.14,40),darkMaterial,[0,0,.495],head);
