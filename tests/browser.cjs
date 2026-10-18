@@ -66,6 +66,7 @@ async function run(engine,mobile){
   assert(Math.abs((await state(page)).angle-equivalent)<.05,'settle keeps equivalent revolution instead of jumping to zero');
  }
  for(let n=0;n<20;n++)await turnSwipe(160);assert(largest>1080,'many clockwise turns');await equivalentRelease();
+ await down(sx,sy);await move(sx+5,sy);const cancelled=(await state(page)).angle;await up(true);await page.waitForTimeout(100);assert(Math.abs((await state(page)).angle-cancelled)<.05,'cancel near reveal releases capture without settling');
  for(let n=0;n<42;n++)await turnSwipe(-160);assert(smallest< -1080,'many counterclockwise turns');await equivalentRelease();
  if(!mobile){
   await page.keyboard.press('Home');for(let n=0;n<104;n++)await page.keyboard.press('ArrowRight');assert(Math.abs((await state(page)).angle-360)<.05);assert((await state(page)).found,'keyboard reveals at +360');
