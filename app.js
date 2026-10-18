@@ -105,7 +105,7 @@ function endDial(e){
 }
 dial.addEventListener('pointerdown',e=>{
   if(dialDrag||e.button>0)return;e.preventDefault();endDrag();
-  dial.focus({preventScroll:true});dial.setPointerCapture(e.pointerId);
+  dial.classList.add('pointer-focus');dial.focus({preventScroll:true});dial.setPointerCapture(e.pointerId);
   dialDrag={id:e.pointerId,x:e.clientX,remainder:0};dial.classList.add('dragging');
 });
 dial.addEventListener('pointermove',e=>{
@@ -117,6 +117,7 @@ dial.addEventListener('pointermove',e=>{
 });
 for(const event of ['pointerup','pointercancel','lostpointercapture'])dial.addEventListener(event,endDial);
 dial.addEventListener('keydown',e=>{
+  dial.classList.remove('pointer-focus');
   if(['ArrowRight','ArrowUp','ArrowLeft','ArrowDown'].includes(e.key)){
     e.preventDefault();endDial();changeSculpture(['ArrowRight','ArrowUp'].includes(e.key)?1:-1);
   }

@@ -17,3 +17,5 @@ canvas.pointer-focus:focus-visible{outline:none}
 @media(max-width:600px){footer{display:flex;flex-wrap:wrap;align-items:flex-end;gap:9px}#hint{width:100%}.collection-actions{margin:0 auto;width:192px}#dial-help{font-size:10px}footer{bottom:max(18px,env(safe-area-inset-bottom))}}
 @media(max-height:500px){footer{flex-wrap:nowrap}#hint{width:auto}.collection-actions{margin:0;width:172px}#dial{width:172px}#dial-help{font-size:9px}}
 @media(max-width:600px) and (max-height:650px){#hint{font-size:16px;line-height:1.45}#hint span{font-size:12px}footer{gap:2px}.collection-actions{margin-left:auto;margin-right:0}}
+
+#dial.pointer-focus:focus-visible{outline:none}
