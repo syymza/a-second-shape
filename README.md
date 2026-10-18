@@ -29,6 +29,8 @@ npm test
 
 Tests check physical geometry, ray-cast silhouette coverage, browser interaction, unlimited rotation, circular navigation, interrupted gestures, canvas capture, reduced motion, resize, fallback, and a project subpath. Screenshots and results go to `test-results/`. Set `TEST_ENGINES=chromium,webkit` for an additional installed WebKit browser. `CHROME_CHANNEL=chrome` selects installed Chrome; otherwise Playwright Chromium is used.
 
+The production build fingerprints the complete JavaScript dependency graph and stylesheet so a new page cannot reuse an incompatible older controller. Startup errors show a recovery message instead of a blank scene.
+
 CI tests each pull request. Only a successful main-branch test run can deploy the allowlisted static build to GitHub Pages.
 
 ## Making the shadow

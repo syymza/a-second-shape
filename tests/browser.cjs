@@ -42,8 +42,8 @@ async function run(engine,mobile){
  await page.locator('#dial').focus();await page.keyboard.press('ArrowLeft');await settled(page);assert.equal((await state(page)).currentIndex,0);
  await page.locator('#art').focus();await page.keyboard.press('Home');for(let k=0;k<16;k++)await page.keyboard.press('ArrowLeft');await page.waitForTimeout(200);
  await page.screenshot({path:path.join(out,id+'-aligned.png')});
- const png=await page.evaluate(async()=>{const {draw,renderer}=(await import('./app.js')).inspection;draw();const blob=await new Promise(resolve=>renderer.domElement.toBlob(resolve,'image/png'));return await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(blob);});});const file=path.join(out,id+'-export.png'),bytes=Buffer.from(png,'base64');fs.writeFileSync(file,bytes);assert.equal(bytes.readUInt32BE(0),0x89504e47);assert(bytes.length>15000);
- const exportImage=await page.evaluate(async()=>{const {renderer,draw}= (await import('./app.js')).inspection;draw();const bitmap=await createImageBitmap(renderer.domElement);const c=document.createElement('canvas');c.width=80;c.height=80;const x=c.getContext('2d');x.drawImage(bitmap,0,0,80,80);return new Set([...x.getImageData(0,0,80,80).data].filter((_,i)=>i%4!==3)).size;});assert(exportImage>40,'capture is nonblank');
+ const png=await page.evaluate(async()=>{const {draw,renderer}=window.shadowStudy.inspection;draw();const blob=await new Promise(resolve=>renderer.domElement.toBlob(resolve,'image/png'));return await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(blob);});});const file=path.join(out,id+'-export.png'),bytes=Buffer.from(png,'base64');fs.writeFileSync(file,bytes);assert.equal(bytes.readUInt32BE(0),0x89504e47);assert(bytes.length>15000);
+ const exportImage=await page.evaluate(async()=>{const {renderer,draw}= window.shadowStudy.inspection;draw();const bitmap=await createImageBitmap(renderer.domElement);const c=document.createElement('canvas');c.width=80;c.height=80;const x=c.getContext('2d');x.drawImage(bitmap,0,0,80,80);return new Set([...x.getImageData(0,0,80,80).data].filter((_,i)=>i%4!==3)).size;});assert(exportImage>40,'capture is nonblank');
  // Repeated, within-screen swipes must continue through many revolutions.
  await page.locator('#art').focus();await page.keyboard.press('Home');
  let largest=0,smallest=0;
@@ -81,16 +81,27 @@ async function run(engine,mobile){
   for(const dpr of [1,2,3]){
    const extra=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:dpr,isMobile:true,hasTouch:true}),probe=await extra.newPage();
    await probe.goto(remote||'http://127.0.0.1:4176/gallery/');await settled(probe);
-   const layout=await probe.evaluate(async()=>{const {camera,lampScreenBounds}=(await import('./app.js')).inspection;return {camera:camera.matrixWorld.elements,projection:camera.projectionMatrix.elements,lamp:lampScreenBounds(),pixelRatio:window.shadowStudy.state.pixelRatio};});
+   const layout=await probe.evaluate(async()=>{const {camera,lampScreenBounds}=window.shadowStudy.inspection;return {camera:camera.matrixWorld.elements,projection:camera.projectionMatrix.elements,lamp:lampScreenBounds(),pixelRatio:window.shadowStudy.state.pixelRatio};});
    assert.equal(layout.pixelRatio,Math.min(dpr,1.65));
    if(dprProof.length){assert.deepEqual(layout.camera,dprProof[0].camera,'pixel ratio does not move camera');assert.deepEqual(layout.projection,dprProof[0].projection,'pixel ratio does not crop composition');assert.deepEqual(layout.lamp,dprProof[0].lamp);}
    dprProof.push({dpr,...layout});await extra.close();
   }
  }
- for(const size of [{width:320,height:568},{width:360,height:640},{width:393,height:684},{width:430,height:932},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(size);await settled(page);const b=await page.locator('#dial').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=size.width&&b.y+b.height<=size.height,'dial reachable after orientation');assert.equal(await page.evaluate(()=>scrollY),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),size.width);const lamp=await page.evaluate(async()=> (await import('./app.js')).inspection.lampScreenBounds());assert(lamp.left>=17.9&&lamp.right<size.width&&lamp.top>=0&&lamp.bottom<size.height,'whole lamp and base stay in frame');await page.screenshot({path:path.join(out,id+'-'+size.width+'.png')});}
+ for(const size of [{width:320,height:568},{width:360,height:640},{width:393,height:684},{width:430,height:932},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(size);await settled(page);const b=await page.locator('#dial').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=size.width&&b.y+b.height<=size.height,'dial reachable after orientation');assert.equal(await page.evaluate(()=>scrollY),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),size.width);const lamp=await page.evaluate(async()=> window.shadowStudy.inspection.lampScreenBounds());assert(lamp.left>=17.9&&lamp.right<size.width&&lamp.top>=0&&lamp.bottom<size.height,'whole lamp and base stay in frame');await page.screenshot({path:path.join(out,id+'-'+size.width+'.png')});}
  const end=await state(page);assert(errors.length===0,errors.join('\n'));assert.deepEqual(badRequests,[]);
  results.push({id,version:browser.version(),touch:!!cdp,currentIndex:end.currentIndex,loads:end.loads,memory:end.memory,frames:end.frames,consoleErrors:errors,failedRequests:badRequests,canvasPngBytes:bytes.length,canvasPngColors:exportImage,continuousTurns:{largest,smallest},dprProof});
  console.log(id+' passed');await context.close();
+ // A returning visitor may still have an incompatible stable-path controller cached.
+ if(!remote&&!mobile){
+  const upgrade=await browser.newPage({viewport:{width:2048,height:1086}});let legacyRequests=0;
+  await upgrade.route('**/app.js',route=>{legacyRequests++;return route.fulfill({contentType:'text/javascript',body:"document.getElementById('reset').onclick=()=>{};"});});
+  await upgrade.goto('http://127.0.0.1:4176/gallery/');await settled(upgrade);
+  assert.equal(legacyRequests,0,'new document never requests the poisoned old controller path');
+  assert(await upgrade.evaluate(()=>!!window.shadowStudy.inspection));
+  await upgrade.screenshot({path:path.join(out,engine+'-cache-upgrade-2048.png')});await upgrade.close();
+  const broken=await browser.newPage();await broken.route('**/assets/app.*.js',route=>route.fulfill({contentType:'text/javascript',body:"throw new Error('simulated startup failure')"}));
+  await broken.goto('http://127.0.0.1:4176/gallery/');await broken.locator('#fallback').waitFor({state:'visible'});assert(await broken.getByRole('button',{name:'Try again'}).isVisible());await broken.close();
+ }
  // Initialization failure gets a useful recovery path.
  if(!remote){const p=await browser.newPage();await p.addInitScript(()=>{HTMLCanvasElement.prototype.getContext=new Proxy(HTMLCanvasElement.prototype.getContext,{apply(target,self,args){return args[0].startsWith('webgl')?null:Reflect.apply(target,self,args);}})});await p.goto('http://127.0.0.1:4176/gallery/');await p.locator('#fallback').waitFor({state:'visible'});assert(await p.getByRole('button',{name:'Try again'}).isVisible());await p.close();}
  }finally{await browser.close();}
