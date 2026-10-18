@@ -13,20 +13,43 @@ async function run(engine,mobile){
  const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:960},deviceScaleFactor:mobile?2:1,isMobile:mobile,hasTouch:mobile,acceptDownloads:true,recordVideo:process.env.RECORD?{dir:out,size:mobile?{width:390,height:844}:{width:960,height:640}}:undefined});
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.on('response',r=>{if(r.status()>=400)badRequests.push(r.url());});
  await page.goto(remote||'http://127.0.0.1:4176/gallery/');await settled(page);
- const initial=await state(page);assert.equal(initial.currentIndex,0);assert.equal(initial.count,10);assert(initial.connectedComponents===1);assert(!initial.found);assert.equal(await page.locator('header button,header a').count(),0);assert.equal(await page.locator('#dial-help').evaluate(e=>getComputedStyle(e).clipPath),'inset(50%)');assert(!/\p{Extended_Pictographic}/u.test(await page.locator('#studio').innerText()),'no emoji glyphs in visible UI');
+ const initial=await state(page);assert.equal(initial.currentIndex,0);assert.equal(await page.locator('#hint').count(),0,'no persistent or reveal caption');assert.equal(initial.count,10);assert(initial.connectedComponents===1);assert(!initial.found);assert.equal(await page.locator('header button,header a').count(),0);assert.equal(await page.locator('#dial-help').evaluate(e=>getComputedStyle(e).clipPath),'inset(50%)');assert(!/\p{Extended_Pictographic}/u.test(await page.locator('#studio').innerText()),'no emoji glyphs in visible UI');
+ const cue=page.locator('#turn-cue');assert(await cue.isVisible(),'first rendered scene offers Turn');assert.equal(await cue.getAttribute('aria-hidden'),'true');assert.equal(await cue.evaluate(e=>getComputedStyle(e).pointerEvents),'none');assert.equal(await page.locator('#art').getAttribute('aria-describedby'),'turn-instructions');
  const box=await page.locator('#dial').boundingBox();assert(box.height>=44);assert(box.y+box.height<=(mobile?844:960));
  await page.screenshot({path:path.join(out,id+'-initial.png')});
  const cdp=mobile&&engine==='chromium'?await context.newCDPSession(page):null;
  async function down(x,y){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});else{await page.mouse.move(x,y);await page.mouse.down();}}
  async function move(x,y){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y,id:1}]});else await page.mouse.move(x,y);}
  async function up(cancel=false){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:cancel?'touchCancel':'touchEnd',touchPoints:[]});else{if(cancel)await page.keyboard.press('Escape');await page.mouse.up();}}
+ const cueBox=await cue.boundingBox(),cueX=cueBox.x+cueBox.width/2,cueY=cueBox.y+cueBox.height/2;
+ assert.equal(await page.evaluate(({x,y})=>document.elementFromPoint(x,y).id,{x:cueX,y:cueY}),'art','cue is transparent to hit testing');
+ await down(cueX,cueY);assert(await cue.isHidden(),'first finger/mouse grab dismisses immediately');const cueStart=(await state(page)).angle;
+ await move(cueX+12,cueY);assert((await state(page)).angle>cueStart,'drag through hint rotates');await up(true);await page.locator('#art').focus();await page.keyboard.press('Home');
  const cx=box.x+box.width/2,cy=box.y+box.height/2;
- await down(cx,cy);await move(cx+43,cy);await move(cx-43,cy);await move(cx,cy);await up();await settled(page);
- assert.equal((await state(page)).currentIndex,0,'rapid reversal preserves all detents');
- await down(cx,cy);await move(cx-44,cy);await up(true);await settled(page);assert.equal((await state(page)).currentIndex,9,'previous wraps from first');assert(!(await state(page)).dialDragging);
+ function polar(deg){const r=26,t=deg*Math.PI/180;return {x:cx+Math.sin(t)*r,y:cy-Math.cos(t)*r};}
+ async function knobMove(deg){const p=polar(deg);await move(p.x,p.y);}
+ let point=polar(0);await down(point.x,point.y);await knobMove(25);await knobMove(-25);await knobMove(0);await up();await settled(page);
+ assert.equal((await state(page)).currentIndex,0,'rapid radial reversal preserves detents');
+ await down(point.x,point.y);await knobMove(-25);await up(true);await settled(page);assert.equal((await state(page)).currentIndex,9,'previous wraps from first');assert(!(await state(page)).dialDragging);
  await page.locator('#dial').focus();await page.keyboard.press('ArrowRight');await settled(page);assert.equal((await state(page)).currentIndex,0);
  // Multiple input events during a fade must accumulate, including complete wraps.
  await page.locator('#dial').focus();for(let n=0;n<23;n++)await page.keyboard.press('ArrowRight');for(let n=0;n<3;n++)await page.keyboard.press('ArrowLeft');await settled(page);assert.equal((await state(page)).currentIndex,0);
+ // Separate wheel rotates continuously without changing scenes; taps provide a non-drag alternative.
+ const wb=await page.locator('#turn-wheel').boundingBox(),wx=wb.x+wb.width/2,wy=wb.y+wb.height/2;
+ assert(wb.height>=44&&wb.width>=88&&wb.y+wb.height<box.y,'reachable plinth rim above selector');
+ await page.locator('#turn-wheel').focus();await page.keyboard.press('Home');
+ await down(wx,wy);await move(wx+1,wy);assert(Math.abs((await state(page)).angle-48)<.001,'wheel retains grab offset');
+ await move(wx+80,wy);assert(Math.abs((await state(page)).angle-48-80*.012*180/Math.PI)<.05);await up(true);
+ assert(!(await state(page)).wheelDragging);assert.equal((await state(page)).currentIndex,0);
+ await page.locator('#turn-wheel').focus();await page.keyboard.press('Home');
+ for(let n=0;n<4;n++){await down(wx-35,wy);await up();}await settled(page);assert(Math.abs((await state(page)).angle)<.05,'four left wheel taps reveal');
+ await page.keyboard.press('ArrowRight');assert(Math.abs((await state(page)).angle-3)<.05);
+ await page.evaluate(()=>document.querySelector('#rotate-left').click());assert(Math.abs((await state(page)).angle+9)<.05);
+ await down(wx,wy);await move(wx+20,wy);await page.evaluate(()=>dispatchEvent(new Event('blur')));assert(!(await state(page)).wheelDragging);await up(true);
+ await down(cx,cy);await up();await settled(page);assert.equal((await state(page)).currentIndex,1,'centre tap chooses next');
+ point=polar(0);await down(point.x,point.y);await up();await settled(page);assert.equal((await state(page)).currentIndex,0,'tick tap chooses scene directly');
+ assert.equal(await page.locator('#dial').getAttribute('aria-valuetext'),'Scene 1 of 10');
+ assert(!/bird|hare|fox|deer|elephant|cat|whale|seahorse|butterfly|tortoise/i.test(await page.locator('.collection-actions').getAttribute('aria-label')||''),'no animal spoilers');
  let baseline;
  for(let cycle=0;cycle<3;cycle++){
   for(let n=0;n<10;n++){
@@ -87,10 +110,21 @@ async function run(engine,mobile){
    dprProof.push({dpr,...layout});await extra.close();
   }
  }
- for(const size of [{width:320,height:568},{width:360,height:640},{width:393,height:684},{width:430,height:932},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(size);await settled(page);const b=await page.locator('#dial').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=size.width&&b.y+b.height<=size.height,'dial reachable after orientation');assert.equal(await page.evaluate(()=>scrollY),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),size.width);const lamp=await page.evaluate(async()=> window.shadowStudy.inspection.lampScreenBounds());assert(lamp.left>=17.9&&lamp.right<size.width&&lamp.top>=0&&lamp.bottom<size.height,'whole lamp and base stay in frame');await page.screenshot({path:path.join(out,id+'-'+size.width+'.png')});}
+ for(const size of [{width:320,height:568},{width:360,height:640},{width:393,height:684},{width:430,height:932},{width:844,height:390},{width:568,height:320},{width:390,height:844}]){await page.setViewportSize(size);await settled(page);const b=await page.locator('#dial').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=size.width&&b.y+b.height<=size.height,'dial reachable after orientation');const wb=await page.locator('#turn-wheel').boundingBox();assert(wb.x>=0&&wb.y>=0&&wb.x+wb.width<=size.width&&wb.y+wb.height<=b.y,'wheel stays above separate knob');assert(Math.abs(b.x+b.width/2-size.width/2)<1,'knob centred on page');assert.equal(await page.evaluate(()=>scrollY),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),size.width);const lamp=await page.evaluate(async()=> window.shadowStudy.inspection.lampScreenBounds());assert(lamp.left>=17.9&&lamp.right<size.width&&lamp.top>=0&&lamp.bottom<size.height,'whole lamp and base stay in frame');await page.screenshot({path:path.join(out,id+'-'+size.width+'.png')});}
+ assert(await cue.isHidden(),'hint never returns while browsing or resetting');assert((await page.locator('#turn-instructions').textContent()).includes('finger or mouse'));
  const end=await state(page);assert(errors.length===0,errors.join('\n'));assert.deepEqual(badRequests,[]);
  results.push({id,version:browser.version(),touch:!!cdp,currentIndex:end.currentIndex,loads:end.loads,memory:end.memory,frames:end.frames,consoleErrors:errors,failedRequests:badRequests,canvasPngBytes:bytes.length,canvasPngColors:exportImage,continuousTurns:{largest,smallest},dprProof});
  console.log(id+' passed');await context.close();
+ // The timer starts after a real frame; it changes DOM opacity, not the WebGL render loop.
+ const intro=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1440,height:960}});
+ for(const motion of ['no-preference','reduce']){
+  await intro.emulateMedia({reducedMotion:motion});await intro.goto(remote||'http://127.0.0.1:4176/gallery/');await intro.waitForFunction(()=>window.shadowStudy?.state.ready);
+  assert(await intro.locator('#turn-cue').isVisible());const idleFrames=(await state(intro)).frames;
+  if(motion==='reduce')assert.equal(await intro.locator('#turn-cue').evaluate(e=>getComputedStyle(e).transitionDuration),'0s');
+  await intro.waitForFunction(()=>document.querySelector('#turn-cue').hidden,{},{timeout:5500});assert.equal((await state(intro)).frames,idleFrames,'hint timeout adds no renderer frames');
+  await intro.locator('#dial').focus();await intro.keyboard.press('ArrowRight');await settled(intro);assert(await intro.locator('#turn-cue').isHidden(),'no repeat on next sculpture');
+ }
+ await intro.close();
  // A returning visitor may still have an incompatible stable-path controller cached.
  if(!remote&&!mobile){
   const upgrade=await browser.newPage({viewport:{width:2048,height:1086}});let legacyRequests=0;
