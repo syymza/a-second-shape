@@ -41,8 +41,8 @@ stem.castShadow=true;
 // A small physical projection lamp. The luminous lens is located at the
 // exact optical emitter and the housing points along the actual spotlight.
 const lamp=new THREE.Group();scene.add(lamp);
-roundedBase(.35,.07,darkMaterial,EMITTER.x,EMITTER.z,lamp);
-mesh(new THREE.CylinderGeometry(.028,.035,2.8,16),stemMaterial,[EMITTER.x,1.6,EMITTER.z],lamp);
+const lampBase=roundedBase(.35,.07,darkMaterial,EMITTER.x,EMITTER.z,lamp);
+const lampStem=mesh(new THREE.CylinderGeometry(.028,.035,2.8,16),stemMaterial,[EMITTER.x,1.6,EMITTER.z],lamp);
 const head=new THREE.Group();head.position.copy(EMITTER);head.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,-1),spot.target.position.clone().sub(EMITTER).normalize());lamp.add(head);
 const body=mesh(new THREE.CylinderGeometry(.14,.23,.55,40,1,true),darkMaterial,[0,0,.22],head);body.rotation.x=Math.PI/2;
 mesh(new THREE.CircleGeometry(.14,40),darkMaterial,[0,0,.495],head);
@@ -52,21 +52,22 @@ const lens=mesh(new THREE.CircleGeometry(.176,48),lensMaterial,[0,0,-.07],head);
 const cableCurve=new THREE.CatmullRomCurve3([new THREE.Vector3(EMITTER.x,.045,EMITTER.z),new THREE.Vector3(EMITTER.x-.7,.025,EMITTER.z+.8),new THREE.Vector3(EMITTER.x-.6,.02,EMITTER.z+2.7)]);
 mesh(new THREE.TubeGeometry(cableCurve,32,.012,6,false),darkMaterial,[0,0,0],lamp);
 
-const START=THREE.MathUtils.degToRad(48),LIMIT=THREE.MathUtils.degToRad(115),SNAP=THREE.MathUtils.degToRad(7);
+const START=THREE.MathUtils.degToRad(48),SNAP=THREE.MathUtils.degToRad(7);
+// Keep the accumulated angle so regrabs never jump across a revolution.
+const revealDistance=value=>Math.atan2(Math.sin(value),Math.cos(value));
 let angle=START,targetAngle=START,drag=null,frame=0,width=0,height=0,found=false,frames=0,renderMs=[],contextLost=false;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
 function draw(){if(contextLost)return;sculpture.rotation.y=angle;const t=performance.now();renderer.render(scene,camera);renderMs.push(performance.now()-t);if(renderMs.length>400)renderMs.shift();frames++;}
 function invalidate(){if(!frame&&!contextLost)frame=requestAnimationFrame(tick);}
 function tick(){frame=0;const d=targetAngle-angle;angle+=d*(reduced.matches?1:.24);if(Math.abs(d)<.0001)angle=targetAngle;draw();if(Math.abs(targetAngle-angle)>.0001)invalidate();}
-function message(){if(!found&&Math.abs(angle)<.02){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}
-function endDrag(e){if(!drag||e?.pointerId!==undefined&&e.pointerId!==drag.id)return;const d=drag;drag=null;canvas.classList.remove('dragging');if(canvas.hasPointerCapture(d.id))canvas.releasePointerCapture(d.id);if(Math.abs(angle)<SNAP){targetAngle=0;if(reduced.matches)angle=0;invalidate();if(!found){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}}
+function message(){if(!found&&Math.abs(revealDistance(angle))<.02){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}
+function endDrag(e){if(!drag||e?.pointerId!==undefined&&e.pointerId!==drag.id)return;const d=drag;drag=null;canvas.classList.remove('dragging');if(canvas.hasPointerCapture(d.id))canvas.releasePointerCapture(d.id);if(e?.type==='pointerup'&&Math.abs(revealDistance(angle))<SNAP){targetAngle=angle-revealDistance(angle);if(reduced.matches)angle=targetAngle;invalidate();if(!found){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}}
 canvas.addEventListener('pointerdown',e=>{if(drag||transitioning||e.button>0)return;e.preventDefault();canvas.classList.add('pointer-focus');canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);drag={id:e.pointerId,x:e.clientX,start:angle};targetAngle=angle;canvas.classList.add('dragging');});
-canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;e.preventDefault();angle=THREE.MathUtils.clamp(drag.start+(e.clientX-drag.x)*.008,-LIMIT,LIMIT);targetAngle=angle;invalidate();});
+canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;e.preventDefault();angle=drag.start+(e.clientX-drag.x)*.008;targetAngle=angle;invalidate();});
 for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,endDrag);
 window.addEventListener('blur',()=>endDrag());document.addEventListener('visibilitychange',()=>{if(document.hidden)endDrag();});
-canvas.addEventListener('keydown',e=>{canvas.classList.remove('pointer-focus');if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();angle=THREE.MathUtils.clamp(angle+(e.key==='ArrowLeft'?-1:1)*Math.PI/60,-LIMIT,LIMIT);targetAngle=angle;if(Math.abs(angle)<.001)message();invalidate();}if(e.key==='Escape')endDrag();if(e.key==='Home'){e.preventDefault();reset();}});
+canvas.addEventListener('keydown',e=>{canvas.classList.remove('pointer-focus');if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();angle=angle+(e.key==='ArrowLeft'?-1:1)*Math.PI/60;targetAngle=angle;if(Math.abs(revealDistance(angle))<.001)message();invalidate();}if(e.key==='Escape')endDrag();if(e.key==='Home'){e.preventDefault();reset();}});
 function reset(){endDrag();angle=targetAngle=START;found=false;$('hint').innerHTML='Turn it slowly.<span>There is more than one way to see.</span>';status.textContent='The sculpture is ready to discover again.';invalidate();}
-$('reset').onclick=reset;
 let desiredIndex=currentIndex,transitioning=false,fade=null,dialDrag=null;
 const dial=$('dial'),detent=42;
 function updateDial(){dial.setAttribute('aria-valuenow',String(currentIndex+1));dial.setAttribute('aria-valuetext','Sculpture '+(currentIndex+1));}
@@ -127,10 +128,30 @@ window.addEventListener('blur',()=>endDial());
 window.addEventListener('resize',()=>endDial());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)endDial();});
 reduced.addEventListener('change',()=>{if(reduced.matches)fade?.finish();});
-$('save').onclick=async()=>{const button=$('save');button.disabled=true;try{draw();const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('No image')),'image/png'));const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='a-second-shape-'+String(currentIndex+1).padStart(2,'0')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(u),30000);status.textContent='Your study is saved as a PNG.';}catch(error){status.textContent='The image could not be saved. Please try again.';console.error(error);}finally{button.disabled=false;}};
-function resize(){endDrag();const r=canvas.getBoundingClientRect();width=r.width;height=r.height;renderer.setSize(width,height,false);const aspect=width/height,view=aspect<.85?8.2:Math.max(12.0,8.8*aspect);if(aspect<.85){camera.position.set(4.5,9,20);camera.lookAt(-.7,height<650?1.7:1.1,2.6);}else{camera.position.set(4.5,6.5,17);camera.lookAt(-1.1,2.2,2);}camera.left=-view/2;camera.right=view/2;camera.top=view/aspect/2;camera.bottom=-camera.top;camera.updateProjectionMatrix();invalidate();}
+function lampScreenBounds(){
+  lamp.updateWorldMatrix(true,true);
+  const bounds=new THREE.Box3().expandByObject(lampBase).expandByObject(lampStem).expandByObject(head);
+  const points=[];
+  for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])points.push(new THREE.Vector3(x,y,z).project(camera));
+  return {left:(Math.min(...points.map(p=>p.x))+1)*width/2,right:(Math.max(...points.map(p=>p.x))+1)*width/2,top:(1-Math.max(...points.map(p=>p.y)))*height/2,bottom:(1-Math.min(...points.map(p=>p.y)))*height/2};
+}
+function resize(){
+  endDrag();const r=canvas.getBoundingClientRect();width=r.width;height=r.height;
+  renderer.setSize(width,height,false);
+  const aspect=width/height,portrait=aspect<.85,view=portrait?9.1:Math.max(12.0,8.8*aspect);
+  if(portrait){camera.position.set(4.5,9,20);camera.lookAt(-.7,height<650?1.7:1.1,2.6);}
+  else{camera.position.set(4.5,6.5,17);camera.lookAt(-1.1,2.2,2);}
+  camera.left=-view/2;camera.right=view/2;camera.top=view/aspect/2;camera.bottom=-camera.top;
+  camera.updateProjectionMatrix();camera.updateMatrixWorld();
+  // Translate the view, never the lamp or sculpture, to protect a CSS-sized gutter.
+  if(portrait){
+    const gutter=Math.max(18,Math.min(26,width*.065)),missing=gutter-lampScreenBounds().left;
+    if(missing>0){const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);camera.position.addScaledVector(right,-missing*view/width);camera.updateMatrixWorld();}
+  }
+  invalidate();
+}
 window.addEventListener('resize',resize);canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();endDrag();endDial();contextLost=true;if(frame)cancelAnimationFrame(frame);frame=0;document.body.classList.add('failed');$('fallback').hidden=false;});canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;document.body.classList.remove('failed');$('fallback').hidden=true;invalidate();});
 resize();
 window.shadowStudy={get state(){return {ready:frames>0,desiredIndex,transitioning,dialDragging:!!dialDrag,currentIndex,count:collection.length,loads,disposedGeometries,memory:{...renderer.info.memory},angle:THREE.MathUtils.radToDeg(angle),target:THREE.MathUtils.radToDeg(targetAngle),dragging:!!drag,found,frames,renderMs:[...renderMs],triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,pixelRatio:renderer.getPixelRatio(),...sculpture.userData};}};
 // Exported for a separate local QA harness, never exposed as artwork controls.
-export const inspection={scene,camera,get sculpture(){return sculpture;},spot,wall,floor,renderer,draw,targetBounds,EMITTER,PIVOT};
+export const inspection={scene,camera,get sculpture(){return sculpture;},spot,wall,floor,renderer,draw,targetBounds,EMITTER,PIVOT,lampScreenBounds};
