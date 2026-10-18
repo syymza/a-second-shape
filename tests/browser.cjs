@@ -14,12 +14,17 @@ async function run(engine,mobile){
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.on('response',r=>{if(r.status()>=400)badRequests.push(r.url());});
  await page.goto(remote||'http://127.0.0.1:4176/gallery/');await settled(page);
  const initial=await state(page);assert.equal(initial.currentIndex,0);assert.equal(initial.count,10);assert(initial.connectedComponents===1);assert(!initial.found);assert.equal(await page.locator('header button,header a').count(),0);assert.equal(await page.locator('#dial-help').evaluate(e=>getComputedStyle(e).clipPath),'inset(50%)');assert(!/\p{Extended_Pictographic}/u.test(await page.locator('#studio').innerText()),'no emoji glyphs in visible UI');
+ const cue=page.locator('#turn-cue');assert(await cue.isVisible(),'first rendered scene offers Turn');assert.equal(await cue.getAttribute('aria-hidden'),'true');assert.equal(await cue.evaluate(e=>getComputedStyle(e).pointerEvents),'none');assert.equal(await page.locator('#art').getAttribute('aria-describedby'),'turn-instructions');
  const box=await page.locator('#dial').boundingBox();assert(box.height>=44);assert(box.y+box.height<=(mobile?844:960));
  await page.screenshot({path:path.join(out,id+'-initial.png')});
  const cdp=mobile&&engine==='chromium'?await context.newCDPSession(page):null;
  async function down(x,y){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});else{await page.mouse.move(x,y);await page.mouse.down();}}
  async function move(x,y){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y,id:1}]});else await page.mouse.move(x,y);}
  async function up(cancel=false){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:cancel?'touchCancel':'touchEnd',touchPoints:[]});else{if(cancel)await page.keyboard.press('Escape');await page.mouse.up();}}
+ const cueBox=await cue.boundingBox(),cueX=cueBox.x+cueBox.width/2,cueY=cueBox.y+cueBox.height/2;
+ assert.equal(await page.evaluate(({x,y})=>document.elementFromPoint(x,y).id,{x:cueX,y:cueY}),'art','cue is transparent to hit testing');
+ await down(cueX,cueY);assert(await cue.isHidden(),'first finger/mouse grab dismisses immediately');const cueStart=(await state(page)).angle;
+ await move(cueX+12,cueY);assert((await state(page)).angle>cueStart,'drag through hint rotates');await up(true);await page.locator('#art').focus();await page.keyboard.press('Home');
  const cx=box.x+box.width/2,cy=box.y+box.height/2;
  await down(cx,cy);await move(cx+43,cy);await move(cx-43,cy);await move(cx,cy);await up();await settled(page);
  assert.equal((await state(page)).currentIndex,0,'rapid reversal preserves all detents');
@@ -88,9 +93,20 @@ async function run(engine,mobile){
   }
  }
  for(const size of [{width:320,height:568},{width:360,height:640},{width:393,height:684},{width:430,height:932},{width:844,height:390},{width:390,height:844}]){await page.setViewportSize(size);await settled(page);const b=await page.locator('#dial').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=size.width&&b.y+b.height<=size.height,'dial reachable after orientation');assert.equal(await page.evaluate(()=>scrollY),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),size.width);const lamp=await page.evaluate(async()=> window.shadowStudy.inspection.lampScreenBounds());assert(lamp.left>=17.9&&lamp.right<size.width&&lamp.top>=0&&lamp.bottom<size.height,'whole lamp and base stay in frame');await page.screenshot({path:path.join(out,id+'-'+size.width+'.png')});}
+ assert(await cue.isHidden(),'hint never returns while browsing or resetting');assert((await page.locator('#turn-instructions').textContent()).includes('finger or mouse'));
  const end=await state(page);assert(errors.length===0,errors.join('\n'));assert.deepEqual(badRequests,[]);
  results.push({id,version:browser.version(),touch:!!cdp,currentIndex:end.currentIndex,loads:end.loads,memory:end.memory,frames:end.frames,consoleErrors:errors,failedRequests:badRequests,canvasPngBytes:bytes.length,canvasPngColors:exportImage,continuousTurns:{largest,smallest},dprProof});
  console.log(id+' passed');await context.close();
+ // The timer starts after a real frame; it changes DOM opacity, not the WebGL render loop.
+ const intro=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1440,height:960}});
+ for(const motion of ['no-preference','reduce']){
+  await intro.emulateMedia({reducedMotion:motion});await intro.goto(remote||'http://127.0.0.1:4176/gallery/');await intro.waitForFunction(()=>window.shadowStudy?.state.ready);
+  assert(await intro.locator('#turn-cue').isVisible());const idleFrames=(await state(intro)).frames;
+  if(motion==='reduce')assert.equal(await intro.locator('#turn-cue').evaluate(e=>getComputedStyle(e).transitionDuration),'0s');
+  await intro.waitForFunction(()=>document.querySelector('#turn-cue').hidden,{},{timeout:5500});assert.equal((await state(intro)).frames,idleFrames,'hint timeout adds no renderer frames');
+  await intro.locator('#dial').focus();await intro.keyboard.press('ArrowRight');await settled(intro);assert(await intro.locator('#turn-cue').isHidden(),'no repeat on next sculpture');
+ }
+ await intro.close();
  // A returning visitor may still have an incompatible stable-path controller cached.
  if(!remote&&!mobile){
   const upgrade=await browser.newPage({viewport:{width:2048,height:1086}});let legacyRequests=0;

@@ -4,6 +4,8 @@ A quiet, browser-only study in sculpture and shadow. Turn an abstract object unt
 
 ## Interaction
 
+A small curved-arrow **Turn** hint appears beside the sculpture when the scene first renders. It fades after a few seconds or disappears immediately when you start interacting, and stays dismissed while browsing. Reduced motion removes the fade; nonvisual keyboard/touch instructions remain available.
+
 - Drag the sculpture horizontally to rotate it through as many turns as you like in either direction. Release close to any equivalent alignment to settle gently into place.
 - Slide the dial horizontally to change sculptures. Each deliberate step selects another; either direction wraps endlessly.
 - Keyboard: focus the sculpture and use Left/Right to rotate, Home to reset, Escape to release. Focus the dial and use arrow keys to browse. Previous/next buttons are also available to assistive technology and appear on keyboard focus.

@@ -57,16 +57,38 @@ const START=THREE.MathUtils.degToRad(48),SNAP=THREE.MathUtils.degToRad(7);
 const revealDistance=value=>Math.atan2(Math.sin(value),Math.cos(value));
 let angle=START,targetAngle=START,drag=null,frame=0,width=0,height=0,found=false,frames=0,renderMs=[],contextLost=false;
 const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-function draw(){if(contextLost)return;sculpture.rotation.y=angle;const t=performance.now();renderer.render(scene,camera);renderMs.push(performance.now()-t);if(renderMs.length>400)renderMs.shift();frames++;}
+const turnCue=$('turn-cue');let turnCueStarted=false,turnCueDismissed=false,turnCueTimer=0;
+function showTurnCue(){
+  if(!turnCue||turnCueStarted||turnCueDismissed||document.hidden||!frames)return;
+  turnCueStarted=true;turnCue.hidden=false;
+  turnCueTimer=setTimeout(()=>dismissTurnCue(false),3200);
+}
+function dismissTurnCue(immediate=true){
+  turnCueDismissed=true;clearTimeout(turnCueTimer);turnCueTimer=0;
+  if(!turnCue)return;
+  if(immediate||reduced.matches){turnCue.hidden=true;return;}
+  turnCue.classList.add('leaving');
+  turnCueTimer=setTimeout(()=>{turnCue.hidden=true;turnCueTimer=0;},350);
+}
+function positionTurnCue(){
+  if(!turnCue)return;
+  const point=PIVOT.clone().project(camera);
+  turnCue.style.left=Math.max(56,Math.min(width-56,(point.x+1)*width/2))+'px';
+  const offset=Math.max(55,Math.min(110,width/(camera.right-camera.left)*.8+13));
+  turnCue.style.top=Math.max(100,Math.min(height-120,(1-point.y)*height/2+offset))+'px';
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(turnCueStarted)dismissTurnCue();}else showTurnCue();});
+
+function draw(){if(contextLost)return;sculpture.rotation.y=angle;const t=performance.now();renderer.render(scene,camera);renderMs.push(performance.now()-t);if(renderMs.length>400)renderMs.shift();frames++;showTurnCue();}
 function invalidate(){if(!frame&&!contextLost)frame=requestAnimationFrame(tick);}
 function tick(){frame=0;const d=targetAngle-angle;angle+=d*(reduced.matches?1:.24);if(Math.abs(d)<.0001)angle=targetAngle;draw();if(Math.abs(targetAngle-angle)>.0001)invalidate();}
 function message(){if(!found&&Math.abs(revealDistance(angle))<.02){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}
 function endDrag(e){if(!drag||e?.pointerId!==undefined&&e.pointerId!==drag.id)return;const d=drag;drag=null;canvas.classList.remove('dragging');if(canvas.hasPointerCapture(d.id))canvas.releasePointerCapture(d.id);if(e?.type==='pointerup'&&Math.abs(revealDistance(angle))<SNAP){targetAngle=angle-revealDistance(angle);if(reduced.matches)angle=targetAngle;invalidate();if(!found){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}}
-canvas.addEventListener('pointerdown',e=>{if(drag||transitioning||e.button>0)return;e.preventDefault();canvas.classList.add('pointer-focus');canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);drag={id:e.pointerId,x:e.clientX,start:angle};targetAngle=angle;canvas.classList.add('dragging');});
+canvas.addEventListener('pointerdown',e=>{if(drag||transitioning||e.button>0)return;dismissTurnCue();e.preventDefault();canvas.classList.add('pointer-focus');canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);drag={id:e.pointerId,x:e.clientX,start:angle};targetAngle=angle;canvas.classList.add('dragging');});
 canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;e.preventDefault();angle=drag.start+(e.clientX-drag.x)*.008;targetAngle=angle;invalidate();});
 for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,endDrag);
 window.addEventListener('blur',()=>endDrag());document.addEventListener('visibilitychange',()=>{if(document.hidden)endDrag();});
-canvas.addEventListener('keydown',e=>{canvas.classList.remove('pointer-focus');if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();angle=angle+(e.key==='ArrowLeft'?-1:1)*Math.PI/60;targetAngle=angle;if(Math.abs(revealDistance(angle))<.001)message();invalidate();}if(e.key==='Escape')endDrag();if(e.key==='Home'){e.preventDefault();reset();}});
+canvas.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','Home','Escape'].includes(e.key))dismissTurnCue();canvas.classList.remove('pointer-focus');if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();angle=angle+(e.key==='ArrowLeft'?-1:1)*Math.PI/60;targetAngle=angle;if(Math.abs(revealDistance(angle))<.001)message();invalidate();}if(e.key==='Escape')endDrag();if(e.key==='Home'){e.preventDefault();reset();}});
 function reset(){endDrag();angle=targetAngle=START;found=false;$('hint').innerHTML='Turn it slowly.<span>There is more than one way to see.</span>';status.textContent='The sculpture is ready to discover again.';invalidate();}
 let desiredIndex=currentIndex,transitioning=false,fade=null,dialDrag=null;
 const dial=$('dial'),detent=42;
@@ -86,6 +108,7 @@ async function fadeTo(from,to,duration){
   await fade.finished.catch(()=>{});
 }
 async function changeSculpture(step){
+  dismissTurnCue();
   desiredIndex=((desiredIndex+step)%collection.length+collection.length)%collection.length;endDrag();
   if(transitioning)return;
   transitioning=true;
@@ -105,7 +128,7 @@ function endDial(e){
   if(dial.hasPointerCapture(id))dial.releasePointerCapture(id);
 }
 dial.addEventListener('pointerdown',e=>{
-  if(dialDrag||e.button>0)return;e.preventDefault();endDrag();
+  if(dialDrag||e.button>0)return;dismissTurnCue();e.preventDefault();endDrag();
   dial.classList.add('pointer-focus');dial.focus({preventScroll:true});dial.setPointerCapture(e.pointerId);
   dialDrag={id:e.pointerId,x:e.clientX,remainder:0};dial.classList.add('dragging');
 });
@@ -148,9 +171,9 @@ function resize(){
     const gutter=Math.max(18,Math.min(26,width*.065)),missing=gutter-lampScreenBounds().left;
     if(missing>0){const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);camera.position.addScaledVector(right,-missing*view/width);camera.updateMatrixWorld();}
   }
-  invalidate();
+  positionTurnCue();invalidate();
 }
-window.addEventListener('resize',resize);canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();endDrag();endDial();contextLost=true;if(frame)cancelAnimationFrame(frame);frame=0;document.body.classList.add('failed');$('fallback').hidden=false;});canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;document.body.classList.remove('failed');$('fallback').hidden=true;invalidate();});
+window.addEventListener('resize',resize);canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();endDrag();endDial();dismissTurnCue();contextLost=true;if(frame)cancelAnimationFrame(frame);frame=0;document.body.classList.add('failed');$('fallback').hidden=false;});canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;document.body.classList.remove('failed');$('fallback').hidden=true;invalidate();});
 resize();
 window.shadowStudy={get state(){return {ready:frames>0,desiredIndex,transitioning,dialDragging:!!dialDrag,currentIndex,count:collection.length,loads,disposedGeometries,memory:{...renderer.info.memory},angle:THREE.MathUtils.radToDeg(angle),target:THREE.MathUtils.radToDeg(targetAngle),dragging:!!drag,found,frames,renderMs:[...renderMs],triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,pixelRatio:renderer.getPixelRatio(),...sculpture.userData};}};
 // Exported for a separate local QA harness, never exposed as artwork controls.
