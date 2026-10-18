@@ -26,12 +26,30 @@ async function run(engine,mobile){
  await down(cueX,cueY);assert(await cue.isHidden(),'first finger/mouse grab dismisses immediately');const cueStart=(await state(page)).angle;
  await move(cueX+12,cueY);assert((await state(page)).angle>cueStart,'drag through hint rotates');await up(true);await page.locator('#art').focus();await page.keyboard.press('Home');
  const cx=box.x+box.width/2,cy=box.y+box.height/2;
- await down(cx,cy);await move(cx+43,cy);await move(cx-43,cy);await move(cx,cy);await up();await settled(page);
- assert.equal((await state(page)).currentIndex,0,'rapid reversal preserves all detents');
- await down(cx,cy);await move(cx-44,cy);await up(true);await settled(page);assert.equal((await state(page)).currentIndex,9,'previous wraps from first');assert(!(await state(page)).dialDragging);
+ function polar(deg){const r=26,t=deg*Math.PI/180;return {x:cx+Math.sin(t)*r,y:cy-Math.cos(t)*r};}
+ async function knobMove(deg){const p=polar(deg);await move(p.x,p.y);}
+ let point=polar(0);await down(point.x,point.y);await knobMove(25);await knobMove(-25);await knobMove(0);await up();await settled(page);
+ assert.equal((await state(page)).currentIndex,0,'rapid radial reversal preserves detents');
+ await down(point.x,point.y);await knobMove(-25);await up(true);await settled(page);assert.equal((await state(page)).currentIndex,9,'previous wraps from first');assert(!(await state(page)).dialDragging);
  await page.locator('#dial').focus();await page.keyboard.press('ArrowRight');await settled(page);assert.equal((await state(page)).currentIndex,0);
  // Multiple input events during a fade must accumulate, including complete wraps.
  await page.locator('#dial').focus();for(let n=0;n<23;n++)await page.keyboard.press('ArrowRight');for(let n=0;n<3;n++)await page.keyboard.press('ArrowLeft');await settled(page);assert.equal((await state(page)).currentIndex,0);
+ // Separate wheel rotates continuously without changing scenes; taps provide a non-drag alternative.
+ const wb=await page.locator('#turn-wheel').boundingBox(),wx=wb.x+wb.width/2,wy=wb.y+wb.height/2;
+ assert(wb.height>=44&&wb.x+wb.width<=box.x,'distinct reachable control targets');
+ await page.locator('#turn-wheel').focus();await page.keyboard.press('Home');
+ await down(wx,wy);await move(wx+1,wy);assert(Math.abs((await state(page)).angle-48)<.001,'wheel retains grab offset');
+ await move(wx+80,wy);assert(Math.abs((await state(page)).angle-48-80*.012*180/Math.PI)<.05);await up(true);
+ assert(!(await state(page)).wheelDragging);assert.equal((await state(page)).currentIndex,0);
+ await page.locator('#turn-wheel').focus();await page.keyboard.press('Home');
+ for(let n=0;n<4;n++){await down(wx-35,wy);await up();}await settled(page);assert(Math.abs((await state(page)).angle)<.05,'four left wheel taps reveal');
+ await page.keyboard.press('ArrowRight');assert(Math.abs((await state(page)).angle-3)<.05);
+ await page.evaluate(()=>document.querySelector('#rotate-left').click());assert(Math.abs((await state(page)).angle+9)<.05);
+ await down(wx,wy);await move(wx+20,wy);await page.evaluate(()=>dispatchEvent(new Event('blur')));assert(!(await state(page)).wheelDragging);await up(true);
+ await down(cx,cy);await up();await settled(page);assert.equal((await state(page)).currentIndex,1,'centre tap chooses next');
+ point=polar(0);await down(point.x,point.y);await up();await settled(page);assert.equal((await state(page)).currentIndex,0,'tick tap chooses scene directly');
+ assert.equal(await page.locator('#dial').getAttribute('aria-valuetext'),'Scene 1 of 10');
+ assert(!/bird|hare|fox|deer|elephant|cat|whale|seahorse|butterfly|tortoise/i.test(await page.locator('.collection-actions').getAttribute('aria-label')||''),'no animal spoilers');
  let baseline;
  for(let cycle=0;cycle<3;cycle++){
   for(let n=0;n<10;n++){

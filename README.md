@@ -1,14 +1,15 @@
 # A second shape
 
-A quiet, browser-only study in sculpture and shadow. Turn an abstract object until an animal comes into the light. Slide the little dial beneath the scene to discover another sculpture; the collection loops in both directions.
+A quiet, browser-only study in sculpture and shadow. Turn an abstract object until an animal comes into the light. Turn the small round selector beneath the scene to discover another sculpture; the ten positions loop in both directions.
 
 ## Interaction
 
-A small curved-arrow **Turn** hint appears beside the sculpture when the scene first renders. It fades after a few seconds or disappears immediately when you start interacting, and stays dismissed while browsing. Reduced motion removes the fade; nonvisual keyboard/touch instructions remain available.
+A small warm-grey curved-arrow **Turn** hint appears beside the sculpture when the scene first renders. It fades after a few seconds or disappears immediately when you start interacting, and stays dismissed while browsing. Reduced motion removes the fade; nonvisual keyboard/touch instructions remain available.
 
 - Drag the sculpture horizontally to rotate it through as many turns as you like in either direction. Release close to any equivalent alignment to settle gently into place.
-- Slide the dial horizontally to change sculptures. Each deliberate step selects another; either direction wraps endlessly.
-- Keyboard: focus the sculpture and use Left/Right to rotate, Home to reset, Escape to release. Focus the dial and use arrow keys to browse. Previous/next buttons are also available to assistive technology and appear on keyboard focus.
+- Drag the ribbed wheel left or right to rotate continuously. Tap its left or right half for 12° steps. Direct scene dragging remains available.
+- Turn the round selector around its centre to browse ten scenes, one detent per scene. The pointer follows the gesture; either direction wraps endlessly. Tap a tick to choose a position, or tap the centre for the next scene.
+- Keyboard: focus the sculpture and use Left/Right to rotate, Home to reset, Escape to release. Focus the wheel for 3° arrow-key rotation or Home to reset. Focus the round selector and use arrow keys to browse, or Enter/Space for next. Separate rotation and previous/next buttons are available to assistive technology and appear on keyboard focus.
 
 ## Run locally
 
