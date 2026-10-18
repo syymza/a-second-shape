@@ -32,7 +32,11 @@ function roundedBase(radius,height,material,x,z,parent=scene){
   const profile=[[0,0],[.85,0],[.91,.015],[.96,.08],[.99,.22],[1,.40],[.995,.60],[.98,.78],[.94,.92],[.88,1],[0,1]].map(([r,y])=>new THREE.Vector2(r*radius,y*height));
   return mesh(new THREE.LatheGeometry(profile,128),material,[x,.005,z],parent);
 }
-const plinth=roundedBase(.78,.085,baseMaterial,PIVOT.x,PIVOT.z);
+const plinth=roundedBase(.78,.12,baseMaterial,PIVOT.x,PIVOT.z);
+const turntableRim=new THREE.InstancedMesh(new THREE.CylinderGeometry(.0035,.0035,.043,4),matte('#b9ad9b'),96);
+const rimMatrix=new THREE.Matrix4();
+for(let n=0;n<96;n++){const theta=n/96*Math.PI*2;rimMatrix.makeTranslation(Math.cos(theta)*.779,.046,Math.sin(theta)*.779);turntableRim.setMatrixAt(n,rimMatrix);}
+turntableRim.position.set(PIVOT.x,0,PIVOT.z);turntableRim.receiveShadow=true;scene.add(turntableRim);
 const stem=mesh(new THREE.CylinderGeometry(.016,.016,2.58,24),stemMaterial,[PIVOT.x,1.31,PIVOT.z]);
 // The stand is a real object in the same light. Its quiet vertical shadow sits
 // below the projected foot; it is not used to draw the animal itself.
@@ -75,9 +79,10 @@ function positionRotationControl(){
   plinth.updateWorldMatrix(true,false);
   const bounds=new THREE.Box3().setFromObject(plinth),points=[];
   for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])points.push(new THREE.Vector3(x,y,z).project(camera));
-  const centre=plinth.position.clone().project(camera);
-  control.style.left=((centre.x+1)*width/2)+'px';
-  control.style.top=((1-Math.min(...points.map(p=>p.y)))*height/2+12)+'px';
+  const left=(Math.min(...points.map(p=>p.x))+1)*width/2,right=(Math.max(...points.map(p=>p.x))+1)*width/2;
+  const top=(1-Math.max(...points.map(p=>p.y)))*height/2,bottom=(1-Math.min(...points.map(p=>p.y)))*height/2;
+  control.style.left=((left+right)/2)+'px';control.style.top=((top+bottom)/2-22)+'px';
+  wheel.style.width=Math.max(88,right-left+12)+'px';
 }
 function positionTurnCue(){
   if(!turnCue)return;
@@ -88,7 +93,7 @@ function positionTurnCue(){
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(turnCueStarted)dismissTurnCue();}else showTurnCue();});
 
-function draw(){if(contextLost)return;sculpture.rotation.y=angle;const t=performance.now();renderer.render(scene,camera);renderMs.push(performance.now()-t);if(renderMs.length>400)renderMs.shift();frames++;updateWheel();showTurnCue();}
+function draw(){if(contextLost)return;sculpture.rotation.y=angle;turntableRim.rotation.y=angle;const t=performance.now();renderer.render(scene,camera);renderMs.push(performance.now()-t);if(renderMs.length>400)renderMs.shift();frames++;updateWheel();showTurnCue();}
 function invalidate(){if(!frame&&!contextLost)frame=requestAnimationFrame(tick);}
 function tick(){frame=0;const d=targetAngle-angle;angle+=d*(reduced.matches?1:.24);if(Math.abs(d)<.0001)angle=targetAngle;draw();if(Math.abs(targetAngle-angle)>.0001)invalidate();}
 function message(){if(!found&&Math.abs(revealDistance(angle))<.02){found=true;status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}
@@ -115,7 +120,6 @@ function updateWheel(){
   if(!wheel)return;
   const degrees=((Math.round(THREE.MathUtils.radToDeg(angle))%360)+360)%360;
   wheel.setAttribute('aria-valuenow',String(degrees));wheel.setAttribute('aria-valuetext',degrees+' degrees');
-  wheel.style.setProperty('--wheel-phase',(((angle/(Math.PI*2)*192)%8)+8)%8+'px');
 }
 function updateDial(preview=0){
   if(!dial)return;

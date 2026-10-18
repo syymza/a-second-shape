@@ -1,13 +1,13 @@
 # A second shape
 
-A quiet, browser-only study in sculpture and shadow. Turn an abstract object until an animal comes into the light. Turn the small round selector at the bottom centre to discover another sculpture; the ten positions loop in both directions.
+A quiet, browser-only study in sculpture and shadow. Turn an abstract object until an animal comes into the light. Turn the small round selector in its grounded base at the bottom centre to discover another sculpture; the ten positions loop in both directions.
 
 ## Interaction
 
 A small warm-grey curved-arrow **Turn** hint appears beside the sculpture when the scene first renders. It fades after a few seconds or disappears immediately when you start interacting, and stays dismissed while browsing. Reduced motion removes the fade; nonvisual keyboard/touch instructions remain available. Persistent introductory and revealed-state captions are omitted; the reveal is announced to screen readers.
 
 - Drag the sculpture horizontally to rotate it through as many turns as you like in either direction. Release close to any equivalent alignment to settle gently into place.
-- The smaller ribbed wheel follows the projected plinth, with a 12px gap below it and a 44px touch target. Drag it left or right to rotate continuously. Tap its left or right half for 12° steps. Direct scene dragging remains available.
+- The sculpture plinth has a subtle ribbed turntable rim, with a transparent touch target at least 88×44px following its projected bounds. Drag the base left or right to rotate continuously. Tap its left or right half for 12° steps. Direct scene dragging remains available.
 - Turn the round selector around its centre to browse ten scenes, one detent per scene. The pointer follows the gesture; either direction wraps endlessly. Tap a tick to choose a position, or tap the centre for the next scene.
 - Keyboard: focus the sculpture and use Left/Right to rotate, Home to reset, Escape to release. Focus the wheel for 3° arrow-key rotation or Home to reset. Focus the round selector and use arrow keys to browse, or Enter/Space for next. Separate rotation and previous/next buttons are available to assistive technology and appear on keyboard focus.
 

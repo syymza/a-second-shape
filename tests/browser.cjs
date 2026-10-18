@@ -36,7 +36,7 @@ async function run(engine,mobile){
  await page.locator('#dial').focus();for(let n=0;n<23;n++)await page.keyboard.press('ArrowRight');for(let n=0;n<3;n++)await page.keyboard.press('ArrowLeft');await settled(page);assert.equal((await state(page)).currentIndex,0);
  // Separate wheel rotates continuously without changing scenes; taps provide a non-drag alternative.
  const wb=await page.locator('#turn-wheel').boundingBox(),wx=wb.x+wb.width/2,wy=wb.y+wb.height/2;
- assert(wb.height>=44&&wb.y+wb.height<box.y,'separate reachable control targets');
+ assert(wb.height>=44&&wb.width>=88&&wb.y+wb.height<box.y,'reachable plinth rim above selector');
  await page.locator('#turn-wheel').focus();await page.keyboard.press('Home');
  await down(wx,wy);await move(wx+1,wy);assert(Math.abs((await state(page)).angle-48)<.001,'wheel retains grab offset');
  await move(wx+80,wy);assert(Math.abs((await state(page)).angle-48-80*.012*180/Math.PI)<.05);await up(true);
