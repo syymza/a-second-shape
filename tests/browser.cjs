@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{spawn}=require('node:child_process');
 const {chromium,webkit}=require('playwright');
+const {assertLampContact}=require('./lamp-contact.cjs');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'test-results');fs.mkdirSync(out,{recursive:true});
 const engines=(process.env.TEST_ENGINES||'chromium').split(','),results=[];
 const remote=process.env.TEST_URL;let server;
@@ -13,7 +14,7 @@ async function run(engine,mobile){
  const context=await browser.newContext({viewport:mobile?{width:390,height:844}:{width:1440,height:960},deviceScaleFactor:mobile?2:1,isMobile:mobile,hasTouch:mobile,acceptDownloads:true,recordVideo:process.env.RECORD?{dir:out,size:mobile?{width:390,height:844}:{width:960,height:640}}:undefined});
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});page.on('response',r=>{if(r.status()>=400)badRequests.push(r.url());});
  await page.goto(remote||'http://127.0.0.1:4176/gallery/');await settled(page);
- const initial=await state(page);assert.equal(initial.currentIndex,0);assert.equal(await page.locator('#hint').count(),0,'no persistent or reveal caption');assert.equal(initial.count,10);assert(initial.connectedComponents===1);assert(!initial.found);assert.equal(await page.locator('header button,header a').count(),0);assert.equal(await page.locator('#dial-help').evaluate(e=>getComputedStyle(e).clipPath),'inset(50%)');assert(!/\p{Extended_Pictographic}/u.test(await page.locator('#studio').innerText()),'no emoji glyphs in visible UI');
+ const initial=await state(page),lampContact=await assertLampContact(page);assert.equal(initial.currentIndex,0);assert.equal(await page.locator('#hint').count(),0,'no persistent or reveal caption');assert.equal(initial.count,10);assert(initial.connectedComponents===1);assert(!initial.found);assert.equal(await page.locator('header button,header a').count(),0);assert.equal(await page.locator('#dial-help').evaluate(e=>getComputedStyle(e).clipPath),'inset(50%)');assert(!/\p{Extended_Pictographic}/u.test(await page.locator('#studio').innerText()),'no emoji glyphs in visible UI');
  const cue=page.locator('#turn-cue');assert(await cue.isVisible(),'first rendered scene offers Turn');assert.equal(await cue.getAttribute('aria-hidden'),'true');assert.equal(await cue.evaluate(e=>getComputedStyle(e).pointerEvents),'none');assert.equal(await page.locator('#art').getAttribute('aria-describedby'),'turn-instructions');
  const box=await page.locator('#dial').boundingBox();assert(box.height>=44);assert(box.y+box.height<=(mobile?844:960));
  await page.screenshot({path:path.join(out,id+'-initial.png')});
@@ -53,7 +54,7 @@ async function run(engine,mobile){
  let baseline;
  for(let cycle=0;cycle<3;cycle++){
   for(let n=0;n<10;n++){
-   const s=await state(page);assert.equal(s.currentIndex,n);assert.equal(s.connectedComponents,1);assert(Number.isFinite(s.angle));
+   const s=await state(page);assert.equal(s.currentIndex,n);assert.equal(s.connectedComponents,1);assert(Number.isFinite(s.angle));await assertLampContact(page);
    if(cycle===0){await page.locator('#art').focus();await page.keyboard.press('Home');for(let k=0;k<16;k++)await page.keyboard.press('ArrowLeft');await page.waitForTimeout(100);assert((await state(page)).found);}
    if(cycle===0)await page.screenshot({path:path.join(out,id+'-'+n+'-aligned.png')});
    await page.locator('#dial').focus();await page.keyboard.press('ArrowRight');await settled(page);
@@ -110,10 +111,10 @@ async function run(engine,mobile){
    dprProof.push({dpr,...layout});await extra.close();
   }
  }
- for(const size of [{width:320,height:568},{width:360,height:640},{width:393,height:684},{width:430,height:932},{width:844,height:390},{width:568,height:320},{width:390,height:844}]){await page.setViewportSize(size);await settled(page);const b=await page.locator('#dial').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=size.width&&b.y+b.height<=size.height,'dial reachable after orientation');const wb=await page.locator('#turn-wheel').boundingBox();assert(wb.x>=0&&wb.y>=0&&wb.x+wb.width<=size.width&&wb.y+wb.height<=b.y,'wheel stays above separate knob');assert(Math.abs(b.x+b.width/2-size.width/2)<1,'knob centred on page');assert.equal(await page.evaluate(()=>scrollY),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),size.width);const lamp=await page.evaluate(async()=> window.shadowStudy.inspection.lampScreenBounds());assert(lamp.left>=17.9&&lamp.right<size.width&&lamp.top>=0&&lamp.bottom<size.height,'whole lamp and base stay in frame');await page.screenshot({path:path.join(out,id+'-'+size.width+'.png')});}
+ const lampSizes=[{width:320,height:568},{width:360,height:640},{width:393,height:684},{width:430,height:932},{width:844,height:390},{width:568,height:320},{width:390,height:844},{width:1440,height:960},{width:1280,height:720},{width:679,height:800},{width:680,height:800},{width:640,height:359},{width:640,height:360},{width:800,height:499},{width:800,height:500}];for(const size of [...lampSizes,...lampSizes.slice().reverse()]){await page.setViewportSize(size);await settled(page);for(let scene=0;scene<10;scene++){await assertLampContact(page);await page.locator('#dial').focus();await page.keyboard.press('ArrowRight');await settled(page);}const b=await page.locator('#dial').boundingBox();assert(b.x>=0&&b.y>=0&&b.x+b.width<=size.width&&b.y+b.height<=size.height,'dial reachable after orientation');const wb=await page.locator('#turn-wheel').boundingBox();assert(wb.x>=0&&wb.y>=0&&wb.x+wb.width<=size.width&&wb.y+wb.height<=b.y,'wheel stays above separate knob');assert(Math.abs(b.x+b.width/2-size.width/2)<1,'knob centred on page');assert.equal(await page.evaluate(()=>scrollY),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),size.width);const lamp=await page.evaluate(async()=> window.shadowStudy.inspection.lampScreenBounds());assert(lamp.left>=17.9&&lamp.right<size.width&&lamp.top>=0&&lamp.bottom<size.height,'whole lamp and base stay in frame');await page.screenshot({path:path.join(out,id+'-'+size.width+'.png')});}
  assert(await cue.isHidden(),'hint never returns while browsing or resetting');assert((await page.locator('#turn-instructions').textContent()).includes('finger or mouse'));
  const end=await state(page);assert(errors.length===0,errors.join('\n'));assert.deepEqual(badRequests,[]);
- results.push({id,version:browser.version(),touch:!!cdp,currentIndex:end.currentIndex,loads:end.loads,memory:end.memory,frames:end.frames,consoleErrors:errors,failedRequests:badRequests,canvasPngBytes:bytes.length,canvasPngColors:exportImage,continuousTurns:{largest,smallest},dprProof});
+ results.push({id,version:browser.version(),touch:!!cdp,currentIndex:end.currentIndex,loads:end.loads,memory:end.memory,frames:end.frames,consoleErrors:errors,failedRequests:badRequests,canvasPngBytes:bytes.length,canvasPngColors:exportImage,continuousTurns:{largest,smallest},lampContact,lampResizeSceneChecks:lampSizes.length*2*10,dprProof});
  console.log(id+' passed');await context.close();
  // The timer starts after a real frame; it changes DOM opacity, not the WebGL render loop.
  const intro=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1440,height:960}});
