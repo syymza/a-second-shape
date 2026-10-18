@@ -237,7 +237,9 @@ function resize(){
   }
   if(height<500){
     const up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
-    camera.position.addScaledVector(up,-70*view/width);camera.updateMatrixWorld();
+    camera.position.addScaledVector(up,-70*view/width);
+    const back=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,2);
+    camera.position.addScaledVector(back,10);camera.updateMatrixWorld();
   }
   positionRotationControl();positionTurnCue();invalidate();
 }
