@@ -1,6 +1,8 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{spawn}=require('node:child_process');
 const {chromium,webkit}=require('playwright');
 const {assertLampContact}=require('./lamp-contact.cjs');
+const {cancelTouch}=require('./touch-cancel.cjs');
+const {verifyCancellationHarness}=require('./touch-cancel-check.cjs');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'test-results');fs.mkdirSync(out,{recursive:true});
 const engines=(process.env.TEST_ENGINES||'chromium').split(','),results=[];
 const remote=process.env.TEST_URL;let server;
@@ -21,7 +23,7 @@ async function run(engine,mobile){
  const cdp=mobile&&engine==='chromium'?await context.newCDPSession(page):null;
  async function down(x,y){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:1}]});else{await page.mouse.move(x,y);await page.mouse.down();}}
  async function move(x,y){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y,id:1}]});else await page.mouse.move(x,y);}
- async function up(cancel=false){if(cdp)await cdp.send('Input.dispatchTouchEvent',{type:cancel?'touchCancel':'touchEnd',touchPoints:[]});else{if(cancel)await page.keyboard.press('Escape');await page.mouse.up();}}
+ async function up(cancel=false){if(cdp){if(cancel)await cancelTouch(page,cdp);else await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}else{if(cancel)await page.keyboard.press('Escape');await page.mouse.up();}}
  const cueBox=await cue.boundingBox(),cueX=cueBox.x+cueBox.width/2,cueY=cueBox.y+cueBox.height/2;
  assert.equal(await page.evaluate(({x,y})=>document.elementFromPoint(x,y).id,{x:cueX,y:cueY}),'art','cue is transparent to hit testing');
  await down(cueX,cueY);assert(await cue.isHidden(),'first finger/mouse grab dismisses immediately');const cueStart=(await state(page)).angle;
@@ -115,7 +117,7 @@ async function run(engine,mobile){
  assert(await cue.isHidden(),'hint never returns while browsing or resetting');assert((await page.locator('#turn-instructions').textContent()).includes('finger or mouse'));
  const end=await state(page);assert(errors.length===0,errors.join('\n'));assert.deepEqual(badRequests,[]);
  results.push({id,version:browser.version(),touch:!!cdp,currentIndex:end.currentIndex,loads:end.loads,memory:end.memory,frames:end.frames,consoleErrors:errors,failedRequests:badRequests,canvasPngBytes:bytes.length,canvasPngColors:exportImage,continuousTurns:{largest,smallest},lampContact,lampResizeSceneChecks:lampSizes.length*2*10,dprProof});
- console.log(id+' passed');await context.close();
+ console.log(id+' passed');await context.close();if(cdp)await verifyCancellationHarness(browser,remote||'http://127.0.0.1:4176/gallery/',out);
  // The timer starts after a real frame; it changes DOM opacity, not the WebGL render loop.
  const intro=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1440,height:960}});
  for(const motion of ['no-preference','reduce']){
