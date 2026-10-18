@@ -1,0 +1,19 @@
+{
+  "name": "a-second-shape",
+  "version": "0.3.0-beta.2",
+  "private": true,
+  "type": "module",
+  "description": "A quiet browser-only study in sculpture and shadow",
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node tests/geometry.mjs && node tests/browser.cjs"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}
