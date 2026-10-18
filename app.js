@@ -70,6 +70,15 @@ function dismissTurnCue(immediate=true){
   turnCue.classList.add('leaving');
   turnCueTimer=setTimeout(()=>{turnCue.hidden=true;turnCueTimer=0;},350);
 }
+function positionRotationControl(){
+  const control=wheel?.parentElement;if(!control||!width||!height)return;
+  plinth.updateWorldMatrix(true,false);
+  const bounds=new THREE.Box3().setFromObject(plinth),points=[];
+  for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])points.push(new THREE.Vector3(x,y,z).project(camera));
+  const centre=plinth.position.clone().project(camera);
+  control.style.left=((centre.x+1)*width/2)+'px';
+  control.style.top=((1-Math.min(...points.map(p=>p.y)))*height/2+12)+'px';
+}
 function positionTurnCue(){
   if(!turnCue)return;
   const point=PIVOT.clone().project(camera);
@@ -82,11 +91,11 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){if(turnCue
 function draw(){if(contextLost)return;sculpture.rotation.y=angle;const t=performance.now();renderer.render(scene,camera);renderMs.push(performance.now()-t);if(renderMs.length>400)renderMs.shift();frames++;updateWheel();showTurnCue();}
 function invalidate(){if(!frame&&!contextLost)frame=requestAnimationFrame(tick);}
 function tick(){frame=0;const d=targetAngle-angle;angle+=d*(reduced.matches?1:.24);if(Math.abs(d)<.0001)angle=targetAngle;draw();if(Math.abs(targetAngle-angle)>.0001)invalidate();}
-function message(){if(!found&&Math.abs(revealDistance(angle))<.02){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}
+function message(){if(!found&&Math.abs(revealDistance(angle))<.02){found=true;status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}}
 function settleRotation(){
   if(Math.abs(revealDistance(angle))>=SNAP)return;
   targetAngle=angle-revealDistance(angle);if(reduced.matches)angle=targetAngle;invalidate();
-  if(!found){found=true;$('hint').textContent='There it is.';const caption=document.createElement('span');caption.textContent=collection[currentIndex].name+', held in the light.';$('hint').append(caption);status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}
+  if(!found){found=true;status.textContent='The shadow has come together. '+collection[currentIndex].name+'.';}
 }
 function endDrag(e){
   if(!drag||e?.pointerId!==undefined&&e.pointerId!==drag.id)return;
@@ -99,7 +108,7 @@ canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return
 for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,endDrag);
 window.addEventListener('blur',()=>endDrag());document.addEventListener('visibilitychange',()=>{if(document.hidden)endDrag();});
 canvas.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','Home','Escape'].includes(e.key))dismissTurnCue();canvas.classList.remove('pointer-focus');if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();angle=angle+(e.key==='ArrowLeft'?-1:1)*Math.PI/60;targetAngle=angle;if(Math.abs(revealDistance(angle))<.001)message();invalidate();}if(e.key==='Escape')endDrag();if(e.key==='Home'){e.preventDefault();reset();}});
-function reset(){endDrag();endWheel();angle=targetAngle=START;found=false;$('hint').innerHTML='Turn it slowly.<span>There is more than one way to see.</span>';status.textContent='The sculpture is ready to discover again.';invalidate();}
+function reset(){endDrag();endWheel();angle=targetAngle=START;found=false;status.textContent='The sculpture is ready to discover again.';invalidate();}
 let desiredIndex=currentIndex,transitioning=false,fade=null,dialDrag=null,selectorAngle=0;
 const dial=$('dial'),wheel=$('turn-wheel'),detent=Math.PI*2/collection.length;
 function updateWheel(){
@@ -216,7 +225,7 @@ function lampScreenBounds(){
 function resize(){
   endDrag();const r=canvas.getBoundingClientRect();width=r.width;height=r.height;
   renderer.setSize(width,height,false);
-  const aspect=width/height,portrait=aspect<.85,view=portrait?9.1:Math.max(12.0,8.8*aspect);
+  const aspect=width/height,portrait=aspect<.85,view=(portrait?9.1:Math.max(12.0,8.8*aspect))*(height<360?1.22:1);
   if(portrait){camera.position.set(4.5,9,20);camera.lookAt(-.7,height<650?1.7:1.1,2.6);}
   else{camera.position.set(4.5,6.5,17);camera.lookAt(-1.1,2.2,2);}
   camera.left=-view/2;camera.right=view/2;camera.top=view/aspect/2;camera.bottom=-camera.top;
@@ -226,10 +235,14 @@ function resize(){
     const gutter=Math.max(18,Math.min(26,width*.065)),missing=gutter-lampScreenBounds().left;
     if(missing>0){const right=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,0);camera.position.addScaledVector(right,-missing*view/width);camera.updateMatrixWorld();}
   }
-  positionTurnCue();invalidate();
+  if(height<500){
+    const up=new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld,1);
+    camera.position.addScaledVector(up,-70*view/width);camera.updateMatrixWorld();
+  }
+  positionRotationControl();positionTurnCue();invalidate();
 }
 window.addEventListener('resize',resize);canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();endDrag();cancelControls();dismissTurnCue();contextLost=true;if(frame)cancelAnimationFrame(frame);frame=0;document.body.classList.add('failed');$('fallback').hidden=false;});canvas.addEventListener('webglcontextrestored',()=>{contextLost=false;document.body.classList.remove('failed');$('fallback').hidden=true;invalidate();});
 resize();
 window.shadowStudy={get state(){return {ready:frames>0,desiredIndex,transitioning,dialDragging:!!dialDrag,wheelDragging:!!wheelDrag,currentIndex,count:collection.length,loads,disposedGeometries,memory:{...renderer.info.memory},angle:THREE.MathUtils.radToDeg(angle),target:THREE.MathUtils.radToDeg(targetAngle),dragging:!!drag,found,frames,renderMs:[...renderMs],triangles:renderer.info.render.triangles,drawCalls:renderer.info.render.calls,pixelRatio:renderer.getPixelRatio(),...sculpture.userData};}};
 // Exported for a separate local QA harness, never exposed as artwork controls.
-export const inspection={scene,camera,get sculpture(){return sculpture;},spot,wall,floor,renderer,draw,targetBounds,EMITTER,PIVOT,lampScreenBounds};
+export const inspection={scene,camera,get sculpture(){return sculpture;},spot,wall,floor,renderer,draw,plinth,targetBounds,EMITTER,PIVOT,lampScreenBounds};
